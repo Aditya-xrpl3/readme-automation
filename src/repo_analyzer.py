@@ -232,4 +232,92 @@ class RepoAnalyzer:
         primary_lang = self._detect_primary_language()
         
         if primary_lang == 'Python':
-            if 
+            if (self.repo_path / '__main__.py').exists():
+                examples.append(f'python -m {self._get_repo_name()}')
+            else:
+                py_files = list(self.repo_path.glob('*.py'))
+                if py_files:
+                    examples.append(f'python {py_files[0].name}')
+                    
+        elif primary_lang in ['JavaScript', 'TypeScript',]:
+            package_json = self.repo_path / 'package.json'
+            if package_json.exists():
+                try:
+                    with open(package_json) as f:
+                        data = json.load(f)
+                        if 'start' in data.get('scripts', {}):
+                            examples.append('npm start')
+                        if 'dev' in data.get('scripts', {}):
+                            examples.append('npm run dev')
+                            
+                except:
+                    pass
+                
+        return examples
+    
+    def _get_license(self) -> Optional[str]:
+        license_files = ['LICENSE', 'LICENSE.txt', 'LICENSE.md', 'COPYING']
+        for filename in license_files:
+            license_path = self.repo_path / filename
+            if license_path.exists():
+                try:
+                    content = license_path.read_text()[:200]
+                    if 'MIT' in content:
+                        return 'MIT'
+                    elif 'Apache' in content:
+                        return 'Apache 2.0'
+                    elif 'GNU' in content:
+                        return 'GPL'
+                    else:
+                        return 'See LICENSE file'
+                    
+                except:
+                    pass
+                
+            return None
+        
+        def _get_author_info(self) -> Dict[str]:
+            author_info = {}
+            
+            try:
+                name = subprocess.check_output(['git', 'config', 'user.name'],
+                                               cwd=self.repo_path).decode().strip()
+                email = subprocess.check_output(['git', 'config', 'user.email'],
+                                                cwd=self.repo_path).decode().strip()
+                author_info = {'name': name, 'email': email}
+            except:
+                pass
+            package_json = self.repo_path / 'package.json'
+            if package_json.exists():
+                try:
+                    with open(package_json) as f:
+                        data = json.load(f)
+                        if 'author' in data:
+                            author_info.update({'name': data['author']})
+                except:
+                    pass
+
+            return author_info
+        
+        def _get_git_info(self) -> Dict[str, str]:
+            git_info = {}
+            
+            try:
+                remotr_url = subprocess.check_output(
+                    ['git', 'config', '--get', 'remote.origin.url'],
+                    cwd=self.repo_path
+                ).decode().strip()
+                git_info['remote_url'] = remote_url
+                
+                if 'github.com' in remote_url:
+                    if remote_url.startswith('git@'):
+                        repo_path = remote_url.split(':')[1].replace('.git', '')
+                    else:
+                        repo_path = remote_url.split('github.com/')[1].replace('.git', '')
+                        
+                    git_info['github_repo'] = repo_path
+                    
+            except:
+                pass
+            
+            return git_info
